@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Artwork 3D Frame Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&display=swap');
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            overflow: hidden;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background 0.5s ease;
+        }
+        #scene-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        #frame-info {
+            position: absolute;
+            left: 5%;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.9);
+            padding: 2rem;
+            border-radius: 1rem;
+            max-width: 300px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        #buy-button {
+            position: absolute;
+            bottom: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 2rem;
+            cursor: pointer;
+            font-size: 1.2em;
+            opacity: 0;
+            transition: opacity 0.3s ease, background 0.3s ease;
+        }
+        #buy-button:hover {
+            background: #45a049;
+        }
+        #theme-toggle, #lang-toggle {
+            position: absolute;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 10;
+            padding: 10px;
+        }
+        #theme-toggle { top: 20px; right: 20px; }
+        #lang-toggle { top: 20px; right: 60px; }
+    </style>
+</head>
+<body>
+    <div id="scene-container"></div>
+    <div id="frame-info"></div>
+    <button id="buy-button">Add to Cart</button>
+    <button id="theme-toggle">🌓</button>
+    <button id="lang-toggle">🌐</button>
+
+    <script>
+        let scene, camera, renderer, frame;
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let currentLanguage = 'en';
+        let currentFrameIndex = 0;
+        
+        // Frame dimensions (in cm)
+        const INNER_WIDTH = 20.32;
+        const INNER_HEIGHT = 25.4;
+        const OUTER_WIDTH = 30.48;
+        const OUTER_HEIGHT = 35.56;
+        const TOTAL_DEPTH = 4.44;
+
+        // Frame details (in cm)
+        const INNER_BORDER_WIDTH = 0.5;
+        const INNER_BORDER_DEPTH = 0.5;
+        const WHITE_BORDER_WIDTH = 1.27;
+        const WHITE_BORDER_DEPTH = 0.64;
+        const GOLD_BORDER_WIDTH = 1.27;
+        const GOLD_BORDER_DEPTH = 0.64;
+        const OUTER_BORDER_WIDTH = 2.54;
+        const OUTER_BORDER_DEPTH = 1.27;
+
+        let frames = [
+            {
+                title: "『王者』 by Ryusei Okuma",
+                titleJa: "『王者』 大熊琉聖作",
+                description: "A unique masterpiece titled \"The Champion\" created by Ryusei Okuma.",
+                descriptionJa: "大熊琉聖によって書かれた、一点もの作品『王者』",
+                price: "$999.99",
+                priceJa: "￥109,999",
+                woodTexture: 'https://i.postimg.cc/QdZ00C4X/2024-08-04-121546.png',
+                photoTexture: 'https://i.postimg.cc/QdZ00C4X/2024-08-04-121546.png',
+                artist: "Ryusei Okuma",
+                date: "8/3"
+            }
+        ];
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0xf0f0f0); // Light gray background
+            document.getElementById('scene-container').appendChild(renderer.domElement);
+
+            createFrame();
+            setupLighting();
+            setupEventListeners();
+            updateFrameInfo();
+
+            camera.position.z = 60;
+            animate();
+        }
+
+        function createFrame() {
+            if (frame) scene.remove(frame);
+
+            frame = new THREE.Group();
+
+            const currentFrame = frames[currentFrameIndex];
+
+            // Create inner border (closest to the picture)
+            const innerBorderGeometry = new THREE.BoxGeometry(
+                INNER_WIDTH + 2 * INNER_BORDER_WIDTH,
+                INNER_HEIGHT + 2 * INNER_BORDER_WIDTH,
+                INNER_BORDER_DEPTH
+            );
+            const innerBorderMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xD4AF37,
+                metalness: 0.7,
+                roughness: 0.3
+            });
+            const innerBorder = new THREE.Mesh(innerBorderGeometry, innerBorderMaterial);
+            innerBorder.position.z = -TOTAL_DEPTH / 2 + INNER_BORDER_DEPTH / 2;
+            frame.add(innerBorder);
+
+            // Create white border
+            const whiteBorderGeometry = new THREE.BoxGeometry(
+                INNER_WIDTH + 2 * (INNER_BORDER_WIDTH + WHITE_BORDER_WIDTH),
+                INNER_HEIGHT + 2 * (INNER_BORDER_WIDTH + WHITE_BORDER_WIDTH),
+                WHITE_BORDER_DEPTH
+            );
+            const whiteBorderMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xFFFFF0,
+                metalness: 0.1,
+                roughness: 0.8
+            });
+            const whiteBorder = new THREE.Mesh(whiteBorderGeometry, whiteBorderMaterial);
+            whiteBorder.position.z = innerBorder.position.z + (INNER_BORDER_DEPTH + WHITE_BORDER_DEPTH) / 2;
+            frame.add(whiteBorder);
+
+            // Create gold border
+            const goldBorderGeometry = new THREE.BoxGeometry(
+                INNER_WIDTH + 2 * (INNER_BORDER_WIDTH + WHITE_BORDER_WIDTH + GOLD_BORDER_WIDTH),
+                INNER_HEIGHT + 2 * (INNER_BORDER_WIDTH + WHITE_BORDER_WIDTH + GOLD_BORDER_WIDTH),
+                GOLD_BORDER_DEPTH
+            );
+            const goldBorderMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xD4AF37,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            const goldBorder = new THREE.Mesh(goldBorderGeometry, goldBorderMaterial);
+            goldBorder.position.z = whiteBorder.position.z + (WHITE_BORDER_DEPTH + GOLD_BORDER_DEPTH) / 2;
+            frame.add(goldBorder);
+
+            // Create outer border (wooden frame)
+            const outerBorderGeometry = new THREE.BoxGeometry(OUTER_WIDTH, OUTER_HEIGHT, OUTER_BORDER_DEPTH);
+            const woodTexture = new THREE.TextureLoader().load(currentFrame.woodTexture);
+            woodTexture.wrapS = THREE.ClampToEdgeWrapping;
+            woodTexture.wrapT = THREE.ClampToEdgeWrapping;
+            woodTexture.repeat.set(1, 1);
+            const outerBorderMaterial = new THREE.MeshPhongMaterial({ 
+                map: woodTexture,
+                bumpMap: woodTexture,
+                bumpScale: 0.1
+            });
+            const outerBorder = new THREE.Mesh(outerBorderGeometry, outerBorderMaterial);
+            outerBorder.position.z = goldBorder.position.z + (GOLD_BORDER_DEPTH + OUTER_BORDER_DEPTH) / 2;
+            frame.add(outerBorder);
+
+            // Create back cover
+            const backCoverGeometry = new THREE.BoxGeometry(OUTER_WIDTH, OUTER_HEIGHT, 0.2);
+            const backCoverMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 }); // Saddle Brown
+            const backCover = new THREE.Mesh(backCoverGeometry, backCoverMaterial);
+            backCover.position.z = -TOTAL_DEPTH / 2 - 0.1;
+            frame.add(backCover);
+
+            // Create photo area with the specified image
+            const photoGeometry = new THREE.PlaneGeometry(INNER_WIDTH, INNER_HEIGHT);
+            const photoTexture = new THREE.TextureLoader().load(
+                currentFrame.photoTexture,
+                function (texture) {
+                    texture.wrapS = THREE.ClampToEdgeWrapping;
+                    texture.wrapT = THREE.ClampToEdgeWrapping;
+                    texture.repeat.set(1, 1);
+                    const photoMaterial = new THREE.MeshBasicMaterial({ map: texture });
+                    const photo = new THREE.Mesh(photoGeometry, photoMaterial);
+                    photo.position.z = -TOTAL_DEPTH / 2 + 0.01;
+                    frame.add(photo);
+                },
+                undefined,
+                function (err) {
+                    console.error('An error happened while loading the texture:', err);
+                }
+            );
+
+            // Add date and artist name to the back
+            const backTextGeometry = new THREE.PlaneGeometry(OUTER_WIDTH * 0.3, OUTER_HEIGHT * 0.1);
+            const backTextCanvas = document.createElement('canvas');
+            const backTextContext = backTextCanvas.getContext('2d');
+            backTextCanvas.width = 512;
+            backTextCanvas.height = 128;
+            backTextContext.fillStyle = 'white';
+            backTextContext.fillRect(0, 0, backTextCanvas.width, backTextCanvas.height);
+            backTextContext.font = 'bold 24px Arial';
+            backTextContext.fillStyle = 'black';
+            backTextContext.textAlign = 'right';
+            backTextContext.textBaseline = 'bottom';
+            backTextContext.fillText(`${currentFrame.date} ${currentFrame.artist}`, 500, 120);
+            
+            const backTextTexture = new THREE.CanvasTexture(backTextCanvas);
+            const backTextMaterial = new THREE.MeshBasicMaterial({ map: backTextTexture, transparent: true });
+            const backText = new THREE.Mesh(backTextGeometry, backTextMaterial);
+            backText.position.set(OUTER_WIDTH * 0.33, -OUTER_HEIGHT * 0.43, -TOTAL_DEPTH / 2 - 0.11);
+            frame.add(backText);
+
+            scene.add(frame);
+        }
+
+        function setupLighting() {
+            scene.clear();
+            scene.add(frame);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight1.position.set(1, 1, 1);
+            scene.add(directionalLight1);
+
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight2.position.set(-1, -1, 1);
+            scene.add(directionalLight2);
+
+            const pointLight = new THREE.PointLight(0xffffff, 0.5);
+            pointLight.position.set(0, 0, 10);
+            scene.add(pointLight);
+        }
+
+        function setupEventListeners() {
+            document.addEventListener('mousedown', onMouseDown);
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            window.addEventListener('resize', onWindowResize, false);
+            document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+            document.getElementById('lang-toggle').addEventListener('click', toggleLanguage);
+            document.getElementById('buy-button').addEventListener('click', addToCart);
+        }
+
+        function onMouseDown(event) {
+            isDragging = true;
+            previousMousePosition = {
+                x: event.clientX,
+                y: event.clientY
+            };
+        }
+
+        function onMouseMove(event) {
+            if (!isDragging) return;
+
+            const deltaMove = {
+                x: event.clientX - previousMousePosition.x,
+                y: event.clientY - previousMousePosition.y
+            };
+
+            const rotationSpeed = 0.005;
+
+            frame.rotation.y += deltaMove.x * rotationSpeed;
+            frame.rotation.x += deltaMove.y * rotationSpeed;
+
+            previousMousePosition = {
+                x: event.clientX,
+                y: event.clientY
+            };
+
+            updateFrameInfo();
+        }
+
+        function onMouseUp(event) {
+            isDragging = false;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            TWEEN.update();
+
+            if (!isDragging) {
+                frame.rotation.y += 0.001; // Slight continuous rotation
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('dark-theme');
+            updateFrameInfo();
+        }
+
+        function toggleLanguage() {
+            currentLanguage = currentLanguage === 'en' ? 'ja' : 'en';
+            updateFrameInfo();
+            updateButtonLanguage();
+        }
+
+        function updateButtonLanguage() {
+            const buyButton = document.getElementById('buy-button');
+            buyButton.textContent = currentLanguage === 'en' ? 'Add to Cart' : 'カートに追加';
+        }
+
+        function updateFrameInfo() {
+            const frameInfoElement = document.getElementById('frame-info');
+            const buyButton = document.getElementById('buy-button');
+            const currentFrame = frames[currentFrameIndex];
+
+            if (frame.rotation.y > -Math.PI / 4 && frame.rotation.y < Math.PI / 4) {
+                frameInfoElement.innerHTML = `
+                    <h2>${currentLanguage === 'en' ? currentFrame.title : currentFrame.titleJa}</h2>
+                    <p>${currentLanguage === 'en' ? currentFrame.description : currentFrame.descriptionJa}</p>
+                    <p>${currentLanguage === 'en' ? 'Artist: ' + currentFrame.artist : '作者: ' + currentFrame.artist}</p>
+                    <p>${currentLanguage === 'en' ? 'Date: ' + currentFrame.date : '制作日: ' + currentFrame.date}</p>
+                    <p>${currentLanguage === 'en' ? currentFrame.price : currentFrame.priceJa}</p>
+                `;
+                frameInfoElement.style.opacity = 1;
+                buyButton.style.opacity = 1;
+            } else {
+                frameInfoElement.style.opacity = 0;
+                buyButton.style.opacity = 0;
+            }
+
+            updateButtonLanguage();
+        }
+
+        function addToCart() {
+            alert(currentLanguage === 'en' ? "Added to cart!" : "カートに追加されました！");
+        }
+
+        init();
+    </script>
+</body>
+</html>
