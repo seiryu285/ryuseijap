@@ -27,7 +27,7 @@
         #scene-container {
             position: relative;
             width: 100%;
-            height: 100vh;
+            height: 70vh;
             z-index: -1;
         }
         #frame-info {
@@ -42,7 +42,7 @@
             opacity: 0;
             transition: opacity 0.3s ease;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            display: none; /* Hide initially */
+            display: none;
         }
         #buy-button {
             position: absolute;
@@ -58,7 +58,7 @@
             font-size: 1.2em;
             opacity: 0;
             transition: opacity 0.3s ease, background 0.3s ease;
-            display: none; /* Hide initially */
+            display: none;
         }
         #buy-button:hover {
             background: #45a049;
@@ -72,8 +72,8 @@
             z-index: 10;
             padding: 10px;
         }
-        #theme-toggle { top: 10px; right: 10px; }
-        #lang-toggle { top: 10px; right: 50px; }
+        #theme-toggle { top: 20px; right: 20px; }
+        #lang-toggle { top: 20px; right: 60px; }
     </style>
 </head>
 <body>
@@ -280,9 +280,13 @@
             document.addEventListener('mousedown', onMouseDown);
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
+            document.addEventListener('touchstart', onTouchStart, { passive: false });
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            document.addEventListener('touchend', onTouchEnd, { passive: false });
             window.addEventListener('resize', onWindowResize, false);
             document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
             document.getElementById('lang-toggle').addEventListener('click', toggleLanguage);
+            document.getElementById('lang-toggle').addEventListener('click', toggleInfo);
             document.getElementById('buy-button').addEventListener('click', addToCart);
         }
 
@@ -319,6 +323,43 @@
             isDragging = false;
         }
 
+        function onTouchStart(event) {
+            if (event.touches.length === 1) {
+                isDragging = true;
+                previousMousePosition = {
+                    x: event.touches[0].clientX,
+                    y: event.touches[0].clientY
+                };
+            }
+        }
+
+        function onTouchMove(event) {
+            if (!isDragging || event.touches.length !== 1) return;
+
+            event.preventDefault();
+
+            const deltaMove = {
+                x: event.touches[0].clientX - previousMousePosition.x,
+                y: event.touches[0].clientY - previousMousePosition.y
+            };
+
+            const rotationSpeed = 0.005;
+
+            frame.rotation.y += deltaMove.x * rotationSpeed;
+            frame.rotation.x += deltaMove.y * rotationSpeed;
+
+            previousMousePosition = {
+                x: event.touches[0].clientX,
+                y: event.touches[0].clientY
+            };
+
+            updateFrameInfo();
+        }
+
+        function onTouchEnd(event) {
+            isDragging = false;
+        }
+
         function animate() {
             requestAnimationFrame(animate);
             TWEEN.update();
@@ -345,6 +386,11 @@
             currentLanguage = currentLanguage === 'en' ? 'ja' : 'en';
             updateFrameInfo();
             updateButtonLanguage();
+        }
+
+        function toggleInfo() {
+            infoVisible = !infoVisible;
+            updateFrameInfo();
         }
 
         function updateButtonLanguage() {
@@ -382,11 +428,6 @@
         function addToCart() {
             alert(currentLanguage === 'en' ? "Added to cart!" : "カートに追加されました！");
         }
-
-        document.getElementById('lang-toggle').addEventListener('click', () => {
-            infoVisible = !infoVisible;
-            updateFrameInfo();
-        });
 
         init();
     </script>
